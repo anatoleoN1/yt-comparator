@@ -6,43 +6,41 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-:root {
+:root{
   --bg:#0f1117;
   --card:#1c1f26;
-  --text:#ffffff;
+  --text:#fff;
   --muted:#9aa0aa;
   --accent:#ff3d00;
   --border:#2a2f3a;
 }
-.light {
+.light{
   --bg:#f4f6fb;
-  --card:#ffffff;
-  --text:#000000;
+  --card:#fff;
+  --text:#000;
   --muted:#555;
+  --accent:#ff3d00;
   --border:#ddd;
 }
-* { box-sizing:border-box; }
-body {
+*{box-sizing:border-box;}
+body{
   margin:0;
   font-family:Inter, Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
 }
-.container {
+.container{
   max-width:1300px;
   margin:auto;
   padding:25px;
 }
-header {
+header{
   display:flex;
   justify-content:space-between;
   align-items:center;
 }
-h1 {
-  margin:0;
-  font-size:26px;
-}
-.controls button, select {
+h1{margin:0;font-size:26px;}
+.controls button, select{
   padding:8px 14px;
   margin-left:6px;
   border-radius:6px;
@@ -51,55 +49,78 @@ h1 {
   color:var(--text);
   cursor:pointer;
 }
-.grid {
+.grid{
   display:grid;
   grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
   gap:20px;
   margin-top:20px;
 }
-.card {
+.card{
   background:var(--card);
   border:1px solid var(--border);
   border-radius:12px;
   padding:20px;
 }
-.card h2 {
-  margin-top:0;
-}
-.stat {
+.card h2{margin-top:0;}
+.stat{
   display:flex;
   justify-content:space-between;
   margin:6px 0;
   color:var(--muted);
 }
-.stat span {
-  color:var(--text);
-}
-#winner {
+.stat span{color:var(--text);}
+#winner{
   margin:20px 0;
   font-size:22px;
   font-weight:600;
 }
-table {
+table{
   width:100%;
   border-collapse:collapse;
   margin-top:10px;
 }
-th, td {
+th,td{
   border-bottom:1px solid var(--border);
   padding:8px;
   text-align:center;
 }
-th {
-  background:rgba(0,0,0,0.1);
-}
-.badge {
+th{background:rgba(0,0,0,0.1);}
+.badge{
   padding:4px 8px;
   border-radius:6px;
   font-size:12px;
 }
-.win { background:#2e7d32; color:white; }
-.lose { background:#c62828; color:white; }
+.win{background:#2e7d32;color:white;}
+.lose{background:#c62828;color:white;}
+/* DASHBOARD */
+.dashboard{
+  margin-top:20px;
+}
+.tabs{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.tab{
+  padding:8px 12px;
+  border:1px solid var(--border);
+  background:var(--card);
+  cursor:pointer;
+  border-radius:8px;
+}
+.tab.active{
+  border-color:var(--accent);
+  box-shadow:0 0 0 3px rgba(255,61,0,0.15);
+}
+.analysis{
+  margin-top:20px;
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:20px;
+}
+.analysis .card{
+  padding:16px;
+}
 </style>
 </head>
 
@@ -113,6 +134,9 @@ th {
       <option value="subs">Abonnés</option>
       <option value="views">Vues</option>
       <option value="videos">Vidéos</option>
+      <option value="growth">Croissance</option>
+      <option value="engagement">Engagement</option>
+      <option value="global">Score global</option>
     </select>
     <button onclick="toggleTheme()">🌙 / ☀️</button>
     <button onclick="forceApi()">🔄 API</button>
@@ -122,10 +146,7 @@ th {
 
 <div id="winner"></div>
 
-<div class="grid">
-  <div class="card" id="c1"></div>
-  <div class="card" id="c2"></div>
-</div>
+<div class="grid" id="channelGrid"></div>
 
 <div class="card">
   <h2>📈 Évolution</h2>
@@ -133,19 +154,36 @@ th {
 </div>
 
 <div class="card">
-  <h2>🏆 Historique des classements</h2>
-  <table id="rankingTable">
+  <h2>🏆 Classement global multi-chaînes</h2>
+  <div class="controls">
+    <button onclick="setTop(5)">Top 5</button>
+    <button onclick="setTop(10)">Top 10</button>
+    <button onclick="setTop(50)">Top 50</button>
+  </div>
+  <table id="globalTable">
     <thead>
       <tr>
-        <th>Date</th>
-        <th>1er</th>
-        <th>Score</th>
-        <th>2e</th>
-        <th>Score</th>
+        <th>#</th>
+        <th>Chaîne</th>
+        <th>Score global</th>
+        <th>Pro</th>
+        <th>Engagement</th>
+        <th>Croissance</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
+</div>
+
+<div class="card dashboard">
+  <h2>📌 Dashboard par chaîne</h2>
+  <div class="tabs" id="tabs"></div>
+  <div id="dashContent"></div>
+</div>
+
+<div class="card">
+  <h2>🧭 Mode Analyse</h2>
+  <div class="analysis" id="analysis"></div>
 </div>
 
 </div>
@@ -153,17 +191,20 @@ th {
 <script>
 // ============== CONFIG ==============
 const API_KEY = "AIzaSyBNjEv-yOwdUJr1dANWrNDA0sudTxIYcjs";
-const CHANNEL_1 = "UCEY9shLd79aYWqaKC3RBBSQ";
-const CHANNEL_2 = "UCGp_T6KS9YEORdWqS_Ea-Ig";
+const CHANNELS = [
+  "UCEY9shLd79aYWqaKC3RBBSQ",
+  "UCGp_T6KS9YEORdWqS_Ea-Ig",
+  "UCufy5NnhR8HK9-UL34CCI_g",
+  "UCq8kw889lexw0nEHEhbLFSg",
+  "UC4G1JbAPGpH5LyRVmAleryg",
+  "UCM2SF36MTAKwvkX0jem7Jeg",
+];
 
 const API_CACHE_HOURS = 1;
 const UI_REFRESH_MIN = 2;
-
-const SUB_WEIGHT = 0.6;
-const VIEW_WEIGHT = 0.4;
 // ===================================
 
-let chart;
+let chart, topN = 10;
 
 // Theme persist
 if(localStorage.getItem("theme")==="light")
@@ -188,67 +229,143 @@ async function getData(){
   if(cache && now-cache.time < API_CACHE_HOURS*3600000)
     return cache.data;
 
-  const c1 = await fetchChannel(CHANNEL_1);
-  const c2 = await fetchChannel(CHANNEL_2);
-  const data = {c1,c2};
+  const data = await Promise.all(CHANNELS.map(fetchChannel));
   localStorage.setItem("ytCache",JSON.stringify({time:now,data}));
-  saveHistory(c1,c2);
-  saveRanking(c1,c2);
+  saveHistory(data);
+  saveRanking(data);
   return data;
 }
 
-function display(c,id){
-  document.getElementById(id).innerHTML = `
-    <h2>${c.snippet.title}</h2>
-    <div class="stat">Abonnés <span>${(+c.statistics.subscriberCount).toLocaleString()}</span></div>
-    <div class="stat">Vues <span>${(+c.statistics.viewCount).toLocaleString()}</span></div>
-    <div class="stat">Vidéos <span>${(+c.statistics.videoCount).toLocaleString()}</span></div>
-  `;
+// ====== SCORES ======
+function scorePro(c) {
+  const subs = +c.statistics.subscriberCount;
+  const views = +c.statistics.viewCount;
+  const videos = +c.statistics.videoCount;
+
+  const subsNorm   = Math.log10(subs + 1);
+  const viewsNorm  = Math.log10(views + 1);
+  const videosNorm = Math.log10(videos + 1);
+
+  const rawScore =
+    subsNorm * 0.5 +
+    viewsNorm * 0.4 +
+    videosNorm * 0.1;
+
+  return Math.round(rawScore * 10);
 }
 
-function score(c){
-  return c.statistics.subscriberCount*SUB_WEIGHT +
-         c.statistics.viewCount*VIEW_WEIGHT;
+function engagementScore(c){
+  const subs = +c.statistics.subscriberCount;
+  const views = +c.statistics.viewCount;
+  const videos = +c.statistics.videoCount;
+
+  const raw = (views/(subs+1))*0.7 + (videos/(subs+1))*0.3;
+  return Math.round(Math.log10(raw + 1) * 20);
 }
 
-function saveHistory(c1,c2){
+function growthScore(id, currentSubs){
+  const hist = JSON.parse(localStorage.getItem("ytHistory")) || [];
+  const last = hist.filter(h => h.channels.some(ch => ch.id === id)).slice(-1)[0];
+
+  if(!last) return 0;
+
+  const prev = last.channels.find(ch => ch.id === id);
+  const growth = (currentSubs - prev.subs) / (prev.subs + 1);
+  return Math.round(Math.max(0, Math.min(growth * 100, 100)));
+}
+
+function globalScore(c){
+  const s = scorePro(c);
+  const e = engagementScore(c);
+  const g = growthScore(c.id, +c.statistics.subscriberCount);
+  return Math.round(s*0.5 + e*0.3 + g*0.2);
+}
+
+// ====== HISTORIQUE ======
+function saveHistory(channels){
   const h = JSON.parse(localStorage.getItem("ytHistory"))||[];
-  h.push({
+  const entry = {
     time:new Date().toLocaleString(),
-    c1:{subs:+c1.statistics.subscriberCount,views:+c1.statistics.viewCount,videos:+c1.statistics.videoCount},
-    c2:{subs:+c2.statistics.subscriberCount,views:+c2.statistics.viewCount,videos:+c2.statistics.videoCount}
-  });
+    channels: channels.map(c=>({
+      id:c.id,
+      title:c.snippet.title,
+      subs:+c.statistics.subscriberCount,
+      views:+c.statistics.viewCount,
+      videos:+c.statistics.videoCount
+    }))
+  };
+  h.push(entry);
   localStorage.setItem("ytHistory",JSON.stringify(h));
 }
 
-function saveRanking(c1,c2){
+function saveRanking(channels){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  const s1 = score(c1), s2 = score(c2);
+  const ranked = channels.map(c=>({
+    title:c.snippet.title,
+    score:globalScore(c),
+    pro:scorePro(c),
+    eng:engagementScore(c),
+    growth: growthScore(c.id, +c.statistics.subscriberCount)
+  })).sort((a,b)=>b.score-a.score);
+
   r.push({
     time:new Date().toLocaleString(),
-    first: s1>s2?c1.snippet.title:c2.snippet.title,
-    firstScore:Math.max(s1,s2),
-    second: s1>s2?c2.snippet.title:c1.snippet.title,
-    secondScore:Math.min(s1,s2)
+    ranking: ranked
   });
   localStorage.setItem("ytRanking",JSON.stringify(r));
 }
 
+// ====== UI ======
+function displayChannels(channels){
+  const grid = document.getElementById("channelGrid");
+  grid.innerHTML = "";
+  channels.forEach(c=>{
+    const s = scorePro(c);
+    const e = engagementScore(c);
+    const g = growthScore(c.id, +c.statistics.subscriberCount);
+    const glob = globalScore(c);
+
+    const card = document.createElement("div");
+    card.className="card";
+    card.innerHTML = `
+      <h2>${c.snippet.title}</h2>
+      <div class="stat">Score global <span>${glob} / 100</span></div>
+      <div class="stat">Score pro <span>${s}</span></div>
+      <div class="stat">Engagement <span>${e}</span></div>
+      <div class="stat">Croissance <span>${g}</span></div>
+      <div class="stat">Abonnés <span>${(+c.statistics.subscriberCount).toLocaleString()}</span></div>
+      <div class="stat">Vues <span>${(+c.statistics.viewCount).toLocaleString()}</span></div>
+      <div class="stat">Vidéos <span>${(+c.statistics.videoCount).toLocaleString()}</span></div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
 function updateRankingTable(){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  const body = document.querySelector("#rankingTable tbody");
+  const body = document.querySelector("#globalTable tbody");
   body.innerHTML="";
-  r.slice().reverse().forEach(e=>{
+
+  const latest = r.slice(-1)[0];
+  if(!latest) return;
+
+  latest.ranking.slice(0, topN).forEach((e,i)=>{
     body.innerHTML += `
       <tr>
-        <td>${e.time}</td>
-        <td><span class="badge win">${e.first}</span></td>
-        <td>${Math.round(e.firstScore).toLocaleString()}</td>
-        <td><span class="badge lose">${e.second}</span></td>
-        <td>${Math.round(e.secondScore).toLocaleString()}</td>
+        <td>${i+1}</td>
+        <td>${e.title}</td>
+        <td>${e.score}</td>
+        <td>${e.pro}</td>
+        <td>${e.eng}</td>
+        <td>${e.growth}</td>
       </tr>
     `;
   });
+}
+
+function setTop(n){
+  topN = n;
+  updateRankingTable();
 }
 
 function updateChart(){
@@ -257,45 +374,119 @@ function updateChart(){
 
   if(chart) chart.destroy();
 
+  const labels = h.map(e => e.time);
+  const datasets = CHANNELS.map((id, idx)=>{
+    return {
+      label: "Chaîne " + (idx+1),
+      data: h.map(e => e.channels[idx][metric]),
+      tension:0.2
+    };
+  });
+
   chart = new Chart(document.getElementById("chart"), {
     type:"line",
     data:{
-      labels: h.map(e => e.time),
+      labels,
+      datasets
+    }
+  });
+}
+
+function computeWinner(channels){
+  const ranked = channels.map(c=>({title:c.snippet.title, score:globalScore(c)}))
+    .sort((a,b)=>b.score-a.score);
+
+  const winner = ranked[0];
+  document.getElementById("winner").textContent =
+    `🏆 ${winner.title} domine actuellement avec ${winner.score} / 100`;
+}
+
+// ===== DASHBOARD PAR CHAINE =====
+function buildDashboard(channels){
+  const tabs = document.getElementById("tabs");
+  const content = document.getElementById("dashContent");
+  tabs.innerHTML = "";
+  content.innerHTML = "";
+
+  channels.forEach((c, idx)=>{
+    const btn = document.createElement("div");
+    btn.className="tab";
+    btn.textContent = c.snippet.title;
+    btn.onclick = () => showDash(idx, channels);
+    tabs.appendChild(btn);
+  });
+
+  showDash(0, channels);
+}
+
+function showDash(idx, channels){
+  const content = document.getElementById("dashContent");
+  const c = channels[idx];
+
+  content.innerHTML = `
+    <div class="card">
+      <h2>${c.snippet.title}</h2>
+      <canvas id="dashChart" height="120"></canvas>
+    </div>
+  `;
+
+  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
+  const labels = h.map(e=>e.time);
+  const dataSubs = h.map(e=>e.channels[idx].subs);
+  const dataViews = h.map(e=>e.channels[idx].views);
+  const dataVideos = h.map(e=>e.channels[idx].videos);
+
+  new Chart(document.getElementById("dashChart"), {
+    type:"line",
+    data:{
+      labels,
       datasets:[
-        {
-          label:"Chaîne 1",
-          data: h.map(e => e.c1[metric]),
-          borderColor:"#ff3d00",
-          tension:0.2
-        },
-        {
-          label:"Chaîne 2",
-          data: h.map(e => e.c2[metric]),
-          borderColor:"#2979ff",
-          tension:0.2
-        }
+        {label:"Abonnés", data:dataSubs, tension:0.2},
+        {label:"Vues", data:dataViews, tension:0.2},
+        {label:"Vidéos", data:dataVideos, tension:0.2}
       ]
     }
   });
 }
 
-function computeWinner(c1,c2){
-  const s1=score(c1), s2=score(c2);
-  document.getElementById("winner").textContent =
-    s1>s2?`🏆 ${c1.snippet.title} domine actuellement`:
-    s2>s1?`🏆 ${c2.snippet.title} domine actuellement`:
-    "🤝 Égalité parfaite";
+// ===== MODE ANALYSE =====
+function renderAnalysis(channels){
+  const div = document.getElementById("analysis");
+  div.innerHTML = "";
+
+  channels.forEach(c=>{
+    const e = engagementScore(c);
+    const g = growthScore(c.id, +c.statistics.subscriberCount);
+    const glob = globalScore(c);
+
+    const card = document.createElement("div");
+    card.className="card";
+    card.innerHTML = `
+      <h3>${c.snippet.title}</h3>
+      <div class="stat">Score global <span>${glob}</span></div>
+      <div class="stat">Engagement <span>${e}</span></div>
+      <div class="stat">Croissance <span>${g}</span></div>
+      <div class="stat">Abonnés <span>${(+c.statistics.subscriberCount).toLocaleString()}</span></div>
+      <div class="stat">Vues <span>${(+c.statistics.viewCount).toLocaleString()}</span></div>
+    `;
+    div.appendChild(card);
+  });
 }
 
+// ===== EXPORT CSV =====
 function exportCSV(){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  let csv="Date,1er,Score,2e,Score\n";
-  r.forEach(e=>{
-    csv+=`${e.time},${e.first},${e.firstScore},${e.second},${e.secondScore}\n`;
+  let csv="Date,Rank,Chaîne,Score global,Pro,Engagement,Croissance\n";
+  const latest = r.slice(-1)[0];
+  if(!latest) return;
+
+  latest.ranking.forEach((e,i)=>{
+    csv += `${latest.time},${i+1},${e.title},${e.score},${e.pro},${e.eng},${e.growth}\n`;
   });
+
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="youtube_ranking.csv";
+  a.download="youtube_global_ranking.csv";
   a.click();
 }
 
@@ -305,15 +496,16 @@ function forceApi(){
 }
 
 async function init(){
-  const {c1,c2}=await getData();
-  display(c1,"c1");
-  display(c2,"c2");
+  const channels = await getData();
+  displayChannels(channels);
   updateChart();
   updateRankingTable();
-  computeWinner(c1,c2);
+  computeWinner(channels);
+  buildDashboard(channels);
+  renderAnalysis(channels);
 }
 
-setInterval(init,UI_REFRESH_MIN*60000);
+setInterval(init, UI_REFRESH_MIN*60000);
 init();
 </script>
 </body>

@@ -253,15 +253,27 @@ function updateRankingTable(){
 
 function updateChart(){
   const metric = document.getElementById("metric").value;
-  const h = JSON.parse(localStorage.getItem("ytHistory"))||[];
+  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
+
   if(chart) chart.destroy();
-  chart = new Chart(chartCanvas,{
+
+  chart = new Chart(document.getElementById("chart"), {
     type:"line",
     data:{
-      labels:h.map(e=>e.time),
+      labels: h.map(e => e.time),
       datasets:[
-        {label:"Chaîne 1",data:h.map(e=>e.c1[metric]),borderColor:"#ff3d00"},
-        {label:"Chaîne 2",data:h.map(e=>e.c2[metric]),borderColor:"#2979ff"}
+        {
+          label:"Chaîne 1",
+          data: h.map(e => e.c1[metric]),
+          borderColor:"#ff3d00",
+          tension:0.2
+        },
+        {
+          label:"Chaîne 2",
+          data: h.map(e => e.c2[metric]),
+          borderColor:"#2979ff",
+          tension:0.2
+        }
       ]
     }
   });

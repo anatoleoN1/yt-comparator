@@ -226,15 +226,37 @@ async function fetchChannel(id){
 async function getData(){
   const cache = JSON.parse(localStorage.getItem("ytCache"));
   const now = Date.now();
-  if(cache && now-cache.time < API_CACHE_HOURS*3600000)
-    return cache.data;
 
-  const data = await Promise.all(CHANNELS.map(fetchChannel));
-  localStorage.setItem("ytCache",JSON.stringify({time:now,data}));
+  // si cache OK
+  if(cache && now - cache.time < API_CACHE_HOURS * 3600000){
+    return cache.data;
+  }
+
+  // sinon fetch
+  const responses = await Promise.all(CHANNELS.map(id =>
+    fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`)
+      .then(r => r.json())
+  ));
+
+  // Vérifier si une réponse est une erreur
+  for (const res of responses) {
+    if (res.error) {
+      console.error("YouTube API error:", res.error);
+      alert("Erreur API YouTube : vérifie ta clé ou ton quota.");
+      throw new Error("YouTube API error");
+    }
+  }
+
+  // transformer en tableau de chaînes
+  const data = responses.map(res => res.items[0]);
+
+  localStorage.setItem("ytCache", JSON.stringify({ time: now, data }));
   saveHistory(data);
   saveRanking(data);
+
   return data;
 }
+
 
 // ====== SCORES ======
 function scorePro(c) {
@@ -496,14 +518,24 @@ function forceApi(){
 }
 
 async function init(){
-  const channels = await getData();
-  displayChannels(channels);
-  updateChart();
-  updateRankingTable();
-  computeWinner(channels);
-  buildDashboard(channels);
-  renderAnalysis(channels);
+  try {
+    const channels = await getData();
+
+    if (!Array.isArray(channels)) {
+      throw new Error("channels n'est pas un tableau");
+    }
+
+    displayChannels(channels);
+    updateChart();
+    updateRankingTable();
+    computeWinner(channels);
+    buildDashboard(channels);
+    renderAnalysis(channels);
+  } catch (e) {
+    console.error(e);
+  }
 }
+
 
 setInterval(init, UI_REFRESH_MIN*60000);
 init();

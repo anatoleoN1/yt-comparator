@@ -64,6 +64,8 @@ h1{
   border:1px solid var(--border);
   border-radius:12px;
   padding:20px;
+  position:relative;
+  overflow:auto;
 }
 .card h2{margin-top:0;}
 .stat{
@@ -122,6 +124,8 @@ th{
   color:var(--muted);
 }
 .hr{height:1px;background:var(--border);margin:14px 0;}
+canvas{width:100% !important; max-width:100%;}
+.analysis-container{margin-top:8px;}
 </style>
 </head>
 
@@ -197,7 +201,12 @@ th{
     <button onclick="renderAnalysis()">📊 Analyse</button>
     <button onclick="renderRadar()">🕸️ Radar</button>
   </div>
-  <div id="analysisArea" class="hr"></div>
+
+  <!-- Séparateur visuel -->
+  <div class="hr"></div>
+
+  <!-- Conteneur d'analyse (ne doit PAS avoir la classe hr) -->
+  <div id="analysisArea" class="analysis-container"></div>
 </div>
 
 <div class="card">
@@ -283,8 +292,12 @@ async function getData(){
 
   const channels = [];
   for(const id of CHANNELS){
-    const c = await fetchChannel(id);
-    if(c) channels.push(c);
+    try{
+      const c = await fetchChannel(id);
+      if(c) channels.push(c);
+    }catch(e){
+      console.warn("Erreur fetchChannel", id, e);
+    }
   }
 
   localStorage.setItem("ytCache", JSON.stringify({
@@ -315,10 +328,11 @@ function scoreBase(c){
 
 function growthScore(channel){
   const history = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")));
-  if(history.length < 2) return 0;
+  if(!history || history.length < 2) return 0;
 
   const start = history[0].c[channel.id];
   const end = history[history.length-1].c[channel.id];
+  if(!start || !end) return 0;
 
   const subsGrowth = (end.subs - start.subs) / Math.max(1, start.subs);
   const viewsGrowth = (end.views - start.views) / Math.max(1, start.views);
@@ -351,6 +365,7 @@ function saveHistory(channels){
   const h = JSON.parse(localStorage.getItem("ytHistory"))||[];
   const entry = { time: new Date().toLocaleString(), c:{} };
   channels.forEach((c, idx) => {
+    if(!c || !c.id || !c.statistics) return;
     entry.c[c.id] = {
       subs:+c.statistics.subscriberCount,
       views:+c.statistics.viewCount,
@@ -363,7 +378,7 @@ function saveHistory(channels){
 
 function saveRanking(channels){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  if(channels.length < 2) return;
+  if(!Array.isArray(channels) || channels.length < 2) return;
 
   const sorted = channels.slice().sort((a,b)=>globalScore(b)-globalScore(a));
   r.push({
@@ -401,15 +416,43 @@ function updateMainChart(){
 
   if(mainChart) mainChart.destroy();
 
-  mainChart = new Chart(document.getElementById("mainChart"), {
+  const cachedChannels = JSON.parse(localStorage.getItem("ytCache"))?.data || [];
+
+  if(!cachedChannels || cachedChannels.length === 0){
+    // Pas de données -> afficher message simple
+    const ctxEl = document.getElementById("mainChart");
+    const ctx = ctxEl.getContext ? ctxEl.getContext("2d") : null;
+    if(ctx){
+      mainChart = new Chart(ctx, {
+        type: "line",
+        data: { labels: [], datasets: [] },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { x: { display: false }, y: { display: false } },
+        }
+      });
+    }
+    return;
+  }
+
+  const labels = h.map(e => e.time);
+  const datasets = cachedChannels.map((c, idx) => ({
+    label: c.snippet?.title || `Chaîne ${idx+1}`,
+    data: h.map(e => e.c?.[c.id]?.[metric] ?? 0),
+    tension:0.2,
+    borderColor: undefined
+  }));
+
+  const ctx = document.getElementById("mainChart").getContext("2d");
+  mainChart = new Chart(ctx, {
     type:"line",
     data:{
-      labels: h.map(e => e.time),
-      datasets: CHANNELS.map((id, idx) => ({
-        label:`Chaîne ${idx+1}`,
-        data: h.map(e => e.c[id]?.[metric] ?? 0),
-        tension:0.2
-      }))
+      labels,
+      datasets
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false
     }
   });
 }
@@ -423,7 +466,7 @@ function renderGlobalRanking(){
   body.innerHTML="";
 
   const channels = JSON.parse(localStorage.getItem("ytCache"))?.data || [];
-  if(!Array.isArray(channels)) return;
+  if(!Array.isArray(channels) || channels.length === 0) return;
 
   const sorted = channels.slice().sort((a,b)=>{
     if(sortBy === "subs") return +b.statistics.subscriberCount - +a.statistics.subscriberCount;
@@ -489,15 +532,18 @@ function renderChannelDashboard(channel){
     </div>
   `;
 
-  renderChannelChart(channel);
+  // Small timeout to ensure canvas is in DOM/layout (robustness)
+  setTimeout(() => renderChannelChart(channel), 50);
 }
 
 function renderChannelChart(channel){
   const history = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")) || []);
-  const ctx = document.getElementById(`chart_${channel.id}`);
+  const canvasEl = document.getElementById(`chart_${channel.id}`);
+  if(!canvasEl) return;
 
   if(channelCharts[channel.id]) channelCharts[channel.id].destroy();
 
+  const ctx = canvasEl.getContext('2d');
   channelCharts[channel.id] = new Chart(ctx, {
     type:"line",
     data:{
@@ -507,6 +553,10 @@ function renderChannelChart(channel){
         { label:"Vues", data: history.map(e => e.c[channel.id]?.views ?? 0), tension:0.2 },
         { label:"Vidéos", data: history.map(e => e.c[channel.id]?.videos ?? 0), tension:0.2 }
       ]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:false
     }
   });
 }
@@ -518,7 +568,10 @@ function renderAnalysis(){
   const area = document.getElementById("analysisArea");
   area.innerHTML = "";
 
-  if(channels.length === 0) return;
+  if(channels.length === 0) {
+    area.innerHTML = `<div class="small">Aucune donnée disponible pour l'analyse.</div>`;
+    return;
+  }
 
   const last = history[history.length-1];
 
@@ -548,6 +601,11 @@ function renderRadar(){
     </div>
   `;
 
+  if(channels.length === 0){
+    area.innerHTML = `<div class="small">Aucune donnée disponible pour le radar.</div>`;
+    return;
+  }
+
   const labels = ["Global", "Croissance", "Engagement", "Subs", "Vues"];
   const datasets = channels.map((c, idx) => ({
     label: c.snippet.title,
@@ -564,9 +622,11 @@ function renderRadar(){
 
   if(radarChart) radarChart.destroy();
 
-  radarChart = new Chart(document.getElementById("radarChart"), {
+  const ctx = document.getElementById("radarChart").getContext("2d");
+  radarChart = new Chart(ctx, {
     type:"radar",
-    data:{ labels, datasets }
+    data:{ labels, datasets },
+    options:{ responsive:true, maintainAspectRatio:false }
   });
 }
 
@@ -585,6 +645,10 @@ function exportCSV(){
 
 // --------- Init ---------
 function computeWinner(channels){
+  if(!channels || channels.length === 0) {
+    document.getElementById("winner").textContent = "";
+    return;
+  }
   const sorted = channels.slice().sort((a,b)=>globalScore(b)-globalScore(a));
   const top = sorted[0];
   document.getElementById("winner").textContent =
@@ -593,7 +657,7 @@ function computeWinner(channels){
 
 function renderAll(channels){
   renderTabs(channels);
-  renderChannelDashboard(channels[0]);
+  renderChannelDashboard(channels[0] || {});
   updateMainChart();
   renderGlobalRanking();
   updateRankingTable();

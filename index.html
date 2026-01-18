@@ -2,248 +2,306 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<title>YouTube Compare</title>
-
+<title>YouTube Compare Pro</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
 :root {
-  --bg:#0f0f0f;
-  --card:#1f1f1f;
-  --text:white;
-  --accent:red;
+  --bg:#0f1117;
+  --card:#1c1f26;
+  --text:#ffffff;
+  --muted:#9aa0aa;
+  --accent:#ff3d00;
+  --border:#2a2f3a;
 }
 .light {
-  --bg:#f2f2f2;
-  --card:white;
-  --text:black;
+  --bg:#f4f6fb;
+  --card:#ffffff;
+  --text:#000000;
+  --muted:#555;
+  --border:#ddd;
 }
+* { box-sizing:border-box; }
 body {
   margin:0;
-  font-family:Arial, sans-serif;
+  font-family:Inter, Arial, sans-serif;
   background:var(--bg);
   color:var(--text);
-  text-align:center;
 }
 .container {
-  max-width:1200px;
+  max-width:1300px;
   margin:auto;
-  padding:20px;
+  padding:25px;
 }
-button, select {
+header {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+h1 {
+  margin:0;
+  font-size:26px;
+}
+.controls button, select {
   padding:8px 14px;
-  margin:5px;
-  border:none;
-  border-radius:5px;
-}
-button {
-  background:var(--accent);
-  color:white;
+  margin-left:6px;
+  border-radius:6px;
+  border:1px solid var(--border);
+  background:var(--card);
+  color:var(--text);
   cursor:pointer;
 }
-.cards {
-  display:flex;
-  justify-content:space-around;
+.grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+  gap:20px;
   margin-top:20px;
 }
 .card {
-  width:45%;
   background:var(--card);
+  border:1px solid var(--border);
+  border-radius:12px;
   padding:20px;
-  border-radius:10px;
 }
-.stat { margin:6px 0; }
+.card h2 {
+  margin-top:0;
+}
+.stat {
+  display:flex;
+  justify-content:space-between;
+  margin:6px 0;
+  color:var(--muted);
+}
+.stat span {
+  color:var(--text);
+}
 #winner {
-  font-size:20px;
-  font-weight:bold;
-  margin:15px;
+  margin:20px 0;
+  font-size:22px;
+  font-weight:600;
 }
+table {
+  width:100%;
+  border-collapse:collapse;
+  margin-top:10px;
+}
+th, td {
+  border-bottom:1px solid var(--border);
+  padding:8px;
+  text-align:center;
+}
+th {
+  background:rgba(0,0,0,0.1);
+}
+.badge {
+  padding:4px 8px;
+  border-radius:6px;
+  font-size:12px;
+}
+.win { background:#2e7d32; color:white; }
+.lose { background:#c62828; color:white; }
 </style>
 </head>
 
 <body>
 <div class="container">
 
-<h1>📊 Comparateur de chaînes YouTube</h1>
-
-<button onclick="toggleTheme()">🌙 / ☀️</button>
-<button onclick="forceApiUpdate()">🔄 Forcer MAJ API</button>
-<button onclick="exportCSV()">📥 Export CSV</button>
-<button onclick="resetAll()">🗑️ Reset</button>
-
-<br><br>
-Graphique :
-<select id="metric" onchange="updateChart()">
-  <option value="subs">Abonnés</option>
-  <option value="views">Vues</option>
-  <option value="videos">Vidéos</option>
-</select>
+<header>
+  <h1>📊 YouTube Compare — Pro Dashboard</h1>
+  <div class="controls">
+    <select id="metric" onchange="updateChart()">
+      <option value="subs">Abonnés</option>
+      <option value="views">Vues</option>
+      <option value="videos">Vidéos</option>
+    </select>
+    <button onclick="toggleTheme()">🌙 / ☀️</button>
+    <button onclick="forceApi()">🔄 API</button>
+    <button onclick="exportCSV()">📥 CSV</button>
+  </div>
+</header>
 
 <div id="winner"></div>
 
-<div class="cards">
+<div class="grid">
   <div class="card" id="c1"></div>
   <div class="card" id="c2"></div>
 </div>
 
-<canvas id="chart" height="100"></canvas>
+<div class="card">
+  <h2>📈 Évolution</h2>
+  <canvas id="chart" height="120"></canvas>
+</div>
+
+<div class="card">
+  <h2>🏆 Historique des classements</h2>
+  <table id="rankingTable">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>1er</th>
+        <th>Score</th>
+        <th>2e</th>
+        <th>Score</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
 
 </div>
 
 <script>
-// ================= CONFIG =================
+// ============== CONFIG ==============
 const API_KEY = "AIzaSyBNjEv-yOwdUJr1dANWrNDA0sudTxIYcjs";
-
-// IDs DES CHAÎNES
 const CHANNEL_1 = "UCEY9shLd79aYWqaKC3RBBSQ";
 const CHANNEL_2 = "UCGp_T6KS9YEORdWqS_Ea-Ig";
 
-// ⏱️ API appelée au MAX toutes les X heures
 const API_CACHE_HOURS = 1;
+const UI_REFRESH_MIN = 2;
 
-// 🔁 rafraîchissement UI (sans appel API)
-const UI_REFRESH_MINUTES = 2;
-
-// Classement pondéré FIXE
 const SUB_WEIGHT = 0.6;
 const VIEW_WEIGHT = 0.4;
-// =========================================
+// ===================================
 
 let chart;
 
-// Mode clair / sombre
-function toggleTheme() {
+// Theme persist
+if(localStorage.getItem("theme")==="light")
+  document.body.classList.add("light");
+
+function toggleTheme(){
   document.body.classList.toggle("light");
+  localStorage.setItem("theme",
+    document.body.classList.contains("light")?"light":"dark");
 }
 
-// Appel API
-async function fetchChannel(id) {
-  const url =
-    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`;
-  const r = await fetch(url);
-  const d = await r.json();
-  return d.items[0];
+async function fetchChannel(id){
+  const r = await fetch(
+    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`
+  );
+  return (await r.json()).items[0];
 }
 
-// Cache anti-quota
-async function getData() {
+async function getData(){
   const cache = JSON.parse(localStorage.getItem("ytCache"));
   const now = Date.now();
-
-  if (cache && now - cache.time < API_CACHE_HOURS * 3600000) {
+  if(cache && now-cache.time < API_CACHE_HOURS*3600000)
     return cache.data;
-  }
 
   const c1 = await fetchChannel(CHANNEL_1);
   const c2 = await fetchChannel(CHANNEL_2);
-
-  const data = { c1, c2 };
-  localStorage.setItem("ytCache", JSON.stringify({ time: now, data }));
-  saveHistory(c1, c2);
+  const data = {c1,c2};
+  localStorage.setItem("ytCache",JSON.stringify({time:now,data}));
+  saveHistory(c1,c2);
+  saveRanking(c1,c2);
   return data;
 }
 
-// Affichage cartes
-function display(c, el) {
-  document.getElementById(el).innerHTML = `
+function display(c,id){
+  document.getElementById(id).innerHTML = `
     <h2>${c.snippet.title}</h2>
-    <img src="${c.snippet.thumbnails.medium.url}" width="120"><br>
-    <div class="stat">👥 ${(+c.statistics.subscriberCount).toLocaleString()}</div>
-    <div class="stat">👁️ ${(+c.statistics.viewCount).toLocaleString()}</div>
-    <div class="stat">🎥 ${(+c.statistics.videoCount).toLocaleString()}</div>
+    <div class="stat">Abonnés <span>${(+c.statistics.subscriberCount).toLocaleString()}</span></div>
+    <div class="stat">Vues <span>${(+c.statistics.viewCount).toLocaleString()}</span></div>
+    <div class="stat">Vidéos <span>${(+c.statistics.videoCount).toLocaleString()}</span></div>
   `;
 }
 
-// Historique
-function saveHistory(c1, c2) {
-  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
-  h.push({
-    time: new Date().toLocaleString(),
-    c1: {
-      subs:+c1.statistics.subscriberCount,
-      views:+c1.statistics.viewCount,
-      videos:+c1.statistics.videoCount
-    },
-    c2: {
-      subs:+c2.statistics.subscriberCount,
-      views:+c2.statistics.viewCount,
-      videos:+c2.statistics.videoCount
-    }
-  });
-  localStorage.setItem("ytHistory", JSON.stringify(h));
+function score(c){
+  return c.statistics.subscriberCount*SUB_WEIGHT +
+         c.statistics.viewCount*VIEW_WEIGHT;
 }
 
-// Graphique
-function updateChart() {
+function saveHistory(c1,c2){
+  const h = JSON.parse(localStorage.getItem("ytHistory"))||[];
+  h.push({
+    time:new Date().toLocaleString(),
+    c1:{subs:+c1.statistics.subscriberCount,views:+c1.statistics.viewCount,videos:+c1.statistics.videoCount},
+    c2:{subs:+c2.statistics.subscriberCount,views:+c2.statistics.viewCount,videos:+c2.statistics.videoCount}
+  });
+  localStorage.setItem("ytHistory",JSON.stringify(h));
+}
+
+function saveRanking(c1,c2){
+  const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
+  const s1 = score(c1), s2 = score(c2);
+  r.push({
+    time:new Date().toLocaleString(),
+    first: s1>s2?c1.snippet.title:c2.snippet.title,
+    firstScore:Math.max(s1,s2),
+    second: s1>s2?c2.snippet.title:c1.snippet.title,
+    secondScore:Math.min(s1,s2)
+  });
+  localStorage.setItem("ytRanking",JSON.stringify(r));
+}
+
+function updateRankingTable(){
+  const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
+  const body = document.querySelector("#rankingTable tbody");
+  body.innerHTML="";
+  r.slice().reverse().forEach(e=>{
+    body.innerHTML += `
+      <tr>
+        <td>${e.time}</td>
+        <td><span class="badge win">${e.first}</span></td>
+        <td>${Math.round(e.firstScore).toLocaleString()}</td>
+        <td><span class="badge lose">${e.second}</span></td>
+        <td>${Math.round(e.secondScore).toLocaleString()}</td>
+      </tr>
+    `;
+  });
+}
+
+function updateChart(){
   const metric = document.getElementById("metric").value;
-  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
-
-  if (chart) chart.destroy();
-
-  chart = new Chart(document.getElementById("chart"), {
+  const h = JSON.parse(localStorage.getItem("ytHistory"))||[];
+  if(chart) chart.destroy();
+  chart = new Chart(chartCanvas,{
     type:"line",
     data:{
       labels:h.map(e=>e.time),
       datasets:[
-        { label:"Chaîne 1", data:h.map(e=>e.c1[metric]), borderColor:"red", tension:0.2 },
-        { label:"Chaîne 2", data:h.map(e=>e.c2[metric]), borderColor:"blue", tension:0.2 }
+        {label:"Chaîne 1",data:h.map(e=>e.c1[metric]),borderColor:"#ff3d00"},
+        {label:"Chaîne 2",data:h.map(e=>e.c2[metric]),borderColor:"#2979ff"}
       ]
     }
   });
 }
 
-// Gagnant automatique (pondéré)
-function computeWinner(c1, c2) {
-  const score1 =
-    c1.statistics.subscriberCount * SUB_WEIGHT +
-    c1.statistics.viewCount * VIEW_WEIGHT;
-
-  const score2 =
-    c2.statistics.subscriberCount * SUB_WEIGHT +
-    c2.statistics.viewCount * VIEW_WEIGHT;
-
+function computeWinner(c1,c2){
+  const s1=score(c1), s2=score(c2);
   document.getElementById("winner").textContent =
-    score1 > score2 ? `🏆 ${c1.snippet.title} gagne` :
-    score2 > score1 ? `🏆 ${c2.snippet.title} gagne` :
+    s1>s2?`🏆 ${c1.snippet.title} domine actuellement`:
+    s2>s1?`🏆 ${c2.snippet.title} domine actuellement`:
     "🤝 Égalité parfaite";
 }
 
-// Export CSV
-function exportCSV() {
-  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
-  let csv = "Date,C1 Subs,C1 Views,C1 Videos,C2 Subs,C2 Views,C2 Videos\n";
-  h.forEach(e=>{
-    csv += `${e.time},${e.c1.subs},${e.c1.views},${e.c1.videos},${e.c2.subs},${e.c2.views},${e.c2.videos}\n`;
+function exportCSV(){
+  const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
+  let csv="Date,1er,Score,2e,Score\n";
+  r.forEach(e=>{
+    csv+=`${e.time},${e.first},${e.firstScore},${e.second},${e.secondScore}\n`;
   });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download = "youtube_history.csv";
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="youtube_ranking.csv";
   a.click();
 }
 
-// Reset
-function resetAll() {
-  localStorage.clear();
-  if (chart) chart.destroy();
-}
-
-// Forcer appel API
-function forceApiUpdate() {
+function forceApi(){
   localStorage.removeItem("ytCache");
   init();
 }
 
-// Initialisation
-async function init() {
-  const { c1, c2 } = await getData();
+async function init(){
+  const {c1,c2}=await getData();
   display(c1,"c1");
   display(c2,"c2");
   updateChart();
+  updateRankingTable();
   computeWinner(c1,c2);
 }
 
-// Rafraîchissement fréquent SANS quota
-setInterval(init, UI_REFRESH_MINUTES * 60000);
+setInterval(init,UI_REFRESH_MIN*60000);
 init();
 </script>
 </body>

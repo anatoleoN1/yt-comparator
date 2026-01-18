@@ -9,17 +9,16 @@
 :root{
   --bg:#0f1117;
   --card:#1c1f26;
-  --text:#fff;
+  --text:#ffffff;
   --muted:#9aa0aa;
   --accent:#ff3d00;
   --border:#2a2f3a;
 }
 .light{
   --bg:#f4f6fb;
-  --card:#fff;
-  --text:#000;
+  --card:#ffffff;
+  --text:#000000;
   --muted:#555;
-  --accent:#ff3d00;
   --border:#ddd;
 }
 *{box-sizing:border-box;}
@@ -38,9 +37,14 @@ header{
   display:flex;
   justify-content:space-between;
   align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
 }
-h1{margin:0;font-size:26px;}
-.controls button, select{
+h1{
+  margin:0;
+  font-size:26px;
+}
+.controls button, .controls select{
   padding:8px 14px;
   margin-left:6px;
   border-radius:6px;
@@ -79,12 +83,14 @@ table{
   border-collapse:collapse;
   margin-top:10px;
 }
-th,td{
+th, td{
   border-bottom:1px solid var(--border);
   padding:8px;
   text-align:center;
 }
-th{background:rgba(0,0,0,0.1);}
+th{
+  background:rgba(0,0,0,0.1);
+}
 .badge{
   padding:4px 8px;
   border-radius:6px;
@@ -92,14 +98,11 @@ th{background:rgba(0,0,0,0.1);}
 }
 .win{background:#2e7d32;color:white;}
 .lose{background:#c62828;color:white;}
-/* DASHBOARD */
-.dashboard{
-  margin-top:20px;
-}
 .tabs{
   display:flex;
-  gap:10px;
+  gap:8px;
   flex-wrap:wrap;
+  margin-bottom:12px;
 }
 .tab{
   padding:8px 12px;
@@ -110,17 +113,15 @@ th{background:rgba(0,0,0,0.1);}
 }
 .tab.active{
   border-color:var(--accent);
-  box-shadow:0 0 0 3px rgba(255,61,0,0.15);
+  box-shadow:0 0 0 2px rgba(255,61,0,0.25);
 }
-.analysis{
-  margin-top:20px;
-  display:grid;
-  grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
-  gap:20px;
+.hidden{display:none;}
+.inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.small{
+  font-size:12px;
+  color:var(--muted);
 }
-.analysis .card{
-  padding:16px;
-}
+.hr{height:1px;background:var(--border);margin:14px 0;}
 </style>
 </head>
 
@@ -130,66 +131,95 @@ th{background:rgba(0,0,0,0.1);}
 <header>
   <h1>📊 YouTube Compare — Pro Dashboard</h1>
   <div class="controls">
-    <select id="metric" onchange="updateChart()">
+    <select id="metric" onchange="updateMainChart()">
       <option value="subs">Abonnés</option>
       <option value="views">Vues</option>
       <option value="videos">Vidéos</option>
-      <option value="growth">Croissance</option>
-      <option value="engagement">Engagement</option>
-      <option value="global">Score global</option>
+    </select>
+    <select id="topN" onchange="renderGlobalRanking()">
+      <option value="5">Top 5</option>
+      <option value="10" selected>Top 10</option>
+      <option value="20">Top 20</option>
     </select>
     <button onclick="toggleTheme()">🌙 / ☀️</button>
     <button onclick="forceApi()">🔄 API</button>
     <button onclick="exportCSV()">📥 CSV</button>
+    <button onclick="resetLocal()">🧹 Reset cache</button>
   </div>
 </header>
 
 <div id="winner"></div>
 
-<div class="grid" id="channelGrid"></div>
-
-<div class="card">
-  <h2>📈 Évolution</h2>
-  <canvas id="chart" height="120"></canvas>
+<div class="grid">
+  <div class="card">
+    <h2>📈 Évolution (global)</h2>
+    <canvas id="mainChart" height="120"></canvas>
+  </div>
+  <div class="card">
+    <h2>🏆 Classement global multi-chaînes</h2>
+    <div class="inline">
+      <span class="small">Top N :</span>
+      <select id="globalSort" onchange="renderGlobalRanking()">
+        <option value="globalScore" selected>Score global</option>
+        <option value="growthScore">Croissance</option>
+        <option value="engagementScore">Engagement estimé</option>
+        <option value="subs">Abonnés</option>
+        <option value="views">Vues</option>
+        <option value="videos">Vidéos</option>
+      </select>
+    </div>
+    <table id="globalTable">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Chaîne</th>
+          <th>Score global</th>
+          <th>Croissance</th>
+          <th>Engagement</th>
+          <th>Subs</th>
+          <th>Vues</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
 </div>
 
 <div class="card">
-  <h2>🏆 Classement global multi-chaînes</h2>
-  <div class="controls">
-    <button onclick="setTop(5)">Top 5</button>
-    <button onclick="setTop(10)">Top 10</button>
-    <button onclick="setTop(50)">Top 50</button>
+  <h2>📌 Dashboard par chaîne (onglets)</h2>
+  <div id="tabs" class="tabs"></div>
+  <div id="channelDash"></div>
+</div>
+
+<div class="card">
+  <h2>🧠 Mode Analyse</h2>
+  <div class="inline">
+    <button onclick="renderAnalysis()">📊 Analyse</button>
+    <button onclick="renderRadar()">🕸️ Radar</button>
   </div>
-  <table id="globalTable">
+  <div id="analysisArea" class="hr"></div>
+</div>
+
+<div class="card">
+  <h2>🏆 Historique des classements</h2>
+  <table id="rankingTable">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Chaîne</th>
-        <th>Score global</th>
-        <th>Pro</th>
-        <th>Engagement</th>
-        <th>Croissance</th>
+        <th>Date</th>
+        <th>1er</th>
+        <th>Score</th>
+        <th>2e</th>
+        <th>Score</th>
       </tr>
     </thead>
     <tbody></tbody>
   </table>
 </div>
 
-<div class="card dashboard">
-  <h2>📌 Dashboard par chaîne</h2>
-  <div class="tabs" id="tabs"></div>
-  <div id="dashContent"></div>
-</div>
-
-<div class="card">
-  <h2>🧭 Mode Analyse</h2>
-  <div class="analysis" id="analysis"></div>
-</div>
-
 </div>
 
 <script>
-// ============== CONFIG ==============
+// ================= CONFIG =================
 const API_KEY = "AIzaSyBNjEv-yOwdUJr1dANWrNDA0sudTxIYcjs";
 const CHANNELS = [
   "UCEY9shLd79aYWqaKC3RBBSQ",
@@ -199,14 +229,17 @@ const CHANNELS = [
   "UC4G1JbAPGpH5LyRVmAleryg",
   "UCM2SF36MTAKwvkX0jem7Jeg",
 ];
-
+  
 const API_CACHE_HOURS = 1;
 const UI_REFRESH_MIN = 2;
-// ===================================
+const CACHE_VERSION = 3;
+// =========================================
 
-let chart, topN = 10;
+let mainChart;
+let channelCharts = {};
+let radarChart;
 
-// Theme persist
+// theme persist
 if(localStorage.getItem("theme")==="light")
   document.body.classList.add("light");
 
@@ -216,330 +249,371 @@ function toggleTheme(){
     document.body.classList.contains("light")?"light":"dark");
 }
 
+function resetLocal(){
+  localStorage.removeItem("ytCache");
+  localStorage.removeItem("ytHistory");
+  localStorage.removeItem("ytRanking");
+  alert("Cache supprimé !");
+  init();
+}
+
+// --------- Fetch API ---------
 async function fetchChannel(id){
   const r = await fetch(
     `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`
   );
-  return (await r.json()).items[0];
+  return (await r.json()).items?.[0];
+}
+
+function cleanHistory(h){
+  return (h || []).filter(x =>
+    x &&
+    x.c &&
+    x.c.subs != null && x.c.views != null && x.c.videos != null
+  );
 }
 
 async function getData(){
   const cache = JSON.parse(localStorage.getItem("ytCache"));
   const now = Date.now();
 
-  // si cache OK
-  if(cache && now - cache.time < API_CACHE_HOURS * 3600000){
+  if(cache && cache.version === CACHE_VERSION && now - cache.time < API_CACHE_HOURS*3600000){
     return cache.data;
   }
 
-  // sinon fetch
-  const responses = await Promise.all(CHANNELS.map(id =>
-    fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`)
-      .then(r => r.json())
-  ));
-
-  // Vérifier si une réponse est une erreur
-  for (const res of responses) {
-    if (res.error) {
-      console.error("YouTube API error:", res.error);
-      alert("Erreur API YouTube : vérifie ta clé ou ton quota.");
-      throw new Error("YouTube API error");
-    }
+  const channels = [];
+  for(const id of CHANNELS){
+    const c = await fetchChannel(id);
+    if(c) channels.push(c);
   }
 
-  // transformer en tableau de chaînes
-  const data = responses.map(res => res.items[0]);
+  localStorage.setItem("ytCache", JSON.stringify({
+    version: CACHE_VERSION,
+    time: now,
+    data: channels
+  }));
 
-  localStorage.setItem("ytCache", JSON.stringify({ time: now, data }));
-  saveHistory(data);
-  saveRanking(data);
+  saveHistory(channels);
+  saveRanking(channels);
 
-  return data;
+  return channels;
 }
 
-
-// ====== SCORES ======
-function scorePro(c) {
+// --------- Scores ---------
+function scoreBase(c){
   const subs = +c.statistics.subscriberCount;
   const views = +c.statistics.viewCount;
   const videos = +c.statistics.videoCount;
 
-  const subsNorm   = Math.log10(subs + 1);
-  const viewsNorm  = Math.log10(views + 1);
+  const subsNorm = Math.log10(subs + 1);
+  const viewsNorm = Math.log10(views + 1);
   const videosNorm = Math.log10(videos + 1);
 
-  const rawScore =
-    subsNorm * 0.5 +
-    viewsNorm * 0.4 +
-    videosNorm * 0.1;
-
-  return Math.round(rawScore * 10);
+  const rawScore = subsNorm * 0.5 + viewsNorm * 0.4 + videosNorm * 0.1;
+  return Math.round(rawScore * 10); // sur 100
 }
 
-function engagementScore(c){
-  const subs = +c.statistics.subscriberCount;
-  const views = +c.statistics.viewCount;
-  const videos = +c.statistics.videoCount;
+function growthScore(channel){
+  const history = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")));
+  if(history.length < 2) return 0;
 
-  const raw = (views/(subs+1))*0.7 + (videos/(subs+1))*0.3;
-  return Math.round(Math.log10(raw + 1) * 20);
+  const start = history[0].c[channel.id];
+  const end = history[history.length-1].c[channel.id];
+
+  const subsGrowth = (end.subs - start.subs) / Math.max(1, start.subs);
+  const viewsGrowth = (end.views - start.views) / Math.max(1, start.views);
+  const vidsGrowth = (end.videos - start.videos) / Math.max(1, start.videos);
+
+  const raw = subsGrowth*0.5 + viewsGrowth*0.4 + vidsGrowth*0.1;
+  return Math.round(raw * 100); // %
 }
 
-function growthScore(id, currentSubs){
-  const hist = JSON.parse(localStorage.getItem("ytHistory")) || [];
-  const last = hist.filter(h => h.channels.some(ch => ch.id === id)).slice(-1)[0];
+function engagementScore(channel){
+  const views = +channel.statistics.viewCount;
+  const subs = +channel.statistics.subscriberCount;
+  const videos = +channel.statistics.videoCount;
 
-  if(!last) return 0;
-
-  const prev = last.channels.find(ch => ch.id === id);
-  const growth = (currentSubs - prev.subs) / (prev.subs + 1);
-  return Math.round(Math.max(0, Math.min(growth * 100, 100)));
+  const ratio = views / Math.max(1, subs);
+  const activity = videos / Math.max(1, Math.log10(subs+1)*10);
+  const raw = Math.log10(ratio + 1) * 0.7 + Math.log10(activity + 1) * 0.3;
+  return Math.round(raw * 100);
 }
 
-function globalScore(c){
-  const s = scorePro(c);
-  const e = engagementScore(c);
-  const g = growthScore(c.id, +c.statistics.subscriberCount);
-  return Math.round(s*0.5 + e*0.3 + g*0.2);
+function globalScore(channel){
+  const base = scoreBase(channel);
+  const growth = growthScore(channel);
+  const engagement = engagementScore(channel);
+  return Math.round(base*0.6 + growth*0.25 + engagement*0.15);
 }
 
-// ====== HISTORIQUE ======
+// --------- History ---------
 function saveHistory(channels){
   const h = JSON.parse(localStorage.getItem("ytHistory"))||[];
-  const entry = {
-    time:new Date().toLocaleString(),
-    channels: channels.map(c=>({
-      id:c.id,
-      title:c.snippet.title,
+  const entry = { time: new Date().toLocaleString(), c:{} };
+  channels.forEach((c, idx) => {
+    entry.c[c.id] = {
       subs:+c.statistics.subscriberCount,
       views:+c.statistics.viewCount,
       videos:+c.statistics.videoCount
-    }))
-  };
+    };
+  });
   h.push(entry);
-  localStorage.setItem("ytHistory",JSON.stringify(h));
+  localStorage.setItem("ytHistory", JSON.stringify(h));
 }
 
 function saveRanking(channels){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  const ranked = channels.map(c=>({
-    title:c.snippet.title,
-    score:globalScore(c),
-    pro:scorePro(c),
-    eng:engagementScore(c),
-    growth: growthScore(c.id, +c.statistics.subscriberCount)
-  })).sort((a,b)=>b.score-a.score);
+  if(channels.length < 2) return;
 
+  const sorted = channels.slice().sort((a,b)=>globalScore(b)-globalScore(a));
   r.push({
     time:new Date().toLocaleString(),
-    ranking: ranked
+    first: sorted[0].snippet.title,
+    firstScore: globalScore(sorted[0]),
+    second: sorted[1].snippet.title,
+    secondScore: globalScore(sorted[1])
   });
-  localStorage.setItem("ytRanking",JSON.stringify(r));
-}
 
-// ====== UI ======
-function displayChannels(channels){
-  const grid = document.getElementById("channelGrid");
-  grid.innerHTML = "";
-  channels.forEach(c=>{
-    const s = scorePro(c);
-    const e = engagementScore(c);
-    const g = growthScore(c.id, +c.statistics.subscriberCount);
-    const glob = globalScore(c);
-
-    const card = document.createElement("div");
-    card.className="card";
-    card.innerHTML = `
-      <h2>${c.snippet.title}</h2>
-      <div class="stat">Score global <span>${glob} / 100</span></div>
-      <div class="stat">Score pro <span>${s}</span></div>
-      <div class="stat">Engagement <span>${e}</span></div>
-      <div class="stat">Croissance <span>${g}</span></div>
-      <div class="stat">Abonnés <span>${(+c.statistics.subscriberCount).toLocaleString()}</span></div>
-      <div class="stat">Vues <span>${(+c.statistics.viewCount).toLocaleString()}</span></div>
-      <div class="stat">Vidéos <span>${(+c.statistics.videoCount).toLocaleString()}</span></div>
-    `;
-    grid.appendChild(card);
-  });
+  localStorage.setItem("ytRanking", JSON.stringify(r));
 }
 
 function updateRankingTable(){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  const body = document.querySelector("#globalTable tbody");
+  const body = document.querySelector("#rankingTable tbody");
   body.innerHTML="";
-
-  const latest = r.slice(-1)[0];
-  if(!latest) return;
-
-  latest.ranking.slice(0, topN).forEach((e,i)=>{
+  r.slice().reverse().forEach(e=>{
     body.innerHTML += `
       <tr>
-        <td>${i+1}</td>
-        <td>${e.title}</td>
-        <td>${e.score}</td>
-        <td>${e.pro}</td>
-        <td>${e.eng}</td>
-        <td>${e.growth}</td>
+        <td>${e.time}</td>
+        <td><span class="badge win">${e.first}</span></td>
+        <td>${Math.round(e.firstScore).toLocaleString()}</td>
+        <td><span class="badge lose">${e.second}</span></td>
+        <td>${Math.round(e.secondScore).toLocaleString()}</td>
       </tr>
     `;
   });
 }
 
-function setTop(n){
-  topN = n;
-  updateRankingTable();
-}
-
-function updateChart(){
+// --------- Main chart ---------
+function updateMainChart(){
   const metric = document.getElementById("metric").value;
-  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
+  const h = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")) || []);
 
-  if(chart) chart.destroy();
+  if(mainChart) mainChart.destroy();
 
-  const labels = h.map(e => e.time);
-  const datasets = CHANNELS.map((id, idx)=>{
-    return {
-      label: "Chaîne " + (idx+1),
-      data: h.map(e => e.channels[idx][metric]),
-      tension:0.2
-    };
-  });
-
-  chart = new Chart(document.getElementById("chart"), {
+  mainChart = new Chart(document.getElementById("mainChart"), {
     type:"line",
     data:{
-      labels,
-      datasets
+      labels: h.map(e => e.time),
+      datasets: CHANNELS.map((id, idx) => ({
+        label:`Chaîne ${idx+1}`,
+        data: h.map(e => e.c[id]?.[metric] ?? 0),
+        tension:0.2
+      }))
     }
   });
 }
 
-function computeWinner(channels){
-  const ranked = channels.map(c=>({title:c.snippet.title, score:globalScore(c)}))
-    .sort((a,b)=>b.score-a.score);
+// --------- Global ranking ---------
+function renderGlobalRanking(){
+  const sortBy = document.getElementById("globalSort").value;
+  const topN = parseInt(document.getElementById("topN").value, 10);
 
-  const winner = ranked[0];
-  document.getElementById("winner").textContent =
-    `🏆 ${winner.title} domine actuellement avec ${winner.score} / 100`;
-}
+  const body = document.querySelector("#globalTable tbody");
+  body.innerHTML="";
 
-// ===== DASHBOARD PAR CHAINE =====
-function buildDashboard(channels){
-  const tabs = document.getElementById("tabs");
-  const content = document.getElementById("dashContent");
-  tabs.innerHTML = "";
-  content.innerHTML = "";
+  const channels = JSON.parse(localStorage.getItem("ytCache"))?.data || [];
+  if(!Array.isArray(channels)) return;
 
-  channels.forEach((c, idx)=>{
-    const btn = document.createElement("div");
-    btn.className="tab";
-    btn.textContent = c.snippet.title;
-    btn.onclick = () => showDash(idx, channels);
-    tabs.appendChild(btn);
+  const sorted = channels.slice().sort((a,b)=>{
+    if(sortBy === "subs") return +b.statistics.subscriberCount - +a.statistics.subscriberCount;
+    if(sortBy === "views") return +b.statistics.viewCount - +a.statistics.viewCount;
+    if(sortBy === "videos") return +b.statistics.videoCount - +a.statistics.videoCount;
+    if(sortBy === "growthScore") return growthScore(b) - growthScore(a);
+    if(sortBy === "engagementScore") return engagementScore(b) - engagementScore(a);
+    return globalScore(b) - globalScore(a);
   });
 
-  showDash(0, channels);
+  sorted.slice(0, topN).forEach((c, i) => {
+    body.innerHTML += `
+      <tr>
+        <td>${i+1}</td>
+        <td>${c.snippet.title}</td>
+        <td>${globalScore(c).toLocaleString()}</td>
+        <td>${growthScore(c).toLocaleString()}%</td>
+        <td>${engagementScore(c).toLocaleString()}</td>
+        <td>${(+c.statistics.subscriberCount).toLocaleString()}</td>
+        <td>${(+c.statistics.viewCount).toLocaleString()}</td>
+      </tr>
+    `;
+  });
 }
 
-function showDash(idx, channels){
-  const content = document.getElementById("dashContent");
-  const c = channels[idx];
+// --------- Dashboard par chaîne ---------
+function renderTabs(channels){
+  const tabs = document.getElementById("tabs");
+  tabs.innerHTML="";
 
-  content.innerHTML = `
-    <div class="card">
-      <h2>${c.snippet.title}</h2>
-      <canvas id="dashChart" height="120"></canvas>
+  channels.forEach((c, idx)=>{
+    const tab = document.createElement("div");
+    tab.className = "tab" + (idx===0 ? " active" : "");
+    tab.textContent = c.snippet.title;
+    tab.onclick = () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      renderChannelDashboard(c);
+    };
+    tabs.appendChild(tab);
+  });
+}
+
+function renderChannelDashboard(channel){
+  const dash = document.getElementById("channelDash");
+  dash.innerHTML = `
+    <h3>${channel.snippet.title}</h3>
+    <div class="grid">
+      <div class="card">
+        <h2>📌 Stats</h2>
+        <div class="stat">Score global <span>${globalScore(channel)} / 100</span></div>
+        <div class="stat">Croissance <span>${growthScore(channel)}%</span></div>
+        <div class="stat">Engagement <span>${engagementScore(channel)}</span></div>
+        <div class="stat">Abonnés <span>${(+channel.statistics.subscriberCount).toLocaleString()}</span></div>
+        <div class="stat">Vues <span>${(+channel.statistics.viewCount).toLocaleString()}</span></div>
+        <div class="stat">Vidéos <span>${(+channel.statistics.videoCount).toLocaleString()}</span></div>
+      </div>
+
+      <div class="card">
+        <h2>📈 Graphiques</h2>
+        <canvas id="chart_${channel.id}" height="120"></canvas>
+      </div>
     </div>
   `;
 
-  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
-  const labels = h.map(e=>e.time);
-  const dataSubs = h.map(e=>e.channels[idx].subs);
-  const dataViews = h.map(e=>e.channels[idx].views);
-  const dataVideos = h.map(e=>e.channels[idx].videos);
+  renderChannelChart(channel);
+}
 
-  new Chart(document.getElementById("dashChart"), {
+function renderChannelChart(channel){
+  const history = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")) || []);
+  const ctx = document.getElementById(`chart_${channel.id}`);
+
+  if(channelCharts[channel.id]) channelCharts[channel.id].destroy();
+
+  channelCharts[channel.id] = new Chart(ctx, {
     type:"line",
     data:{
-      labels,
+      labels: history.map(e => e.time),
       datasets:[
-        {label:"Abonnés", data:dataSubs, tension:0.2},
-        {label:"Vues", data:dataViews, tension:0.2},
-        {label:"Vidéos", data:dataVideos, tension:0.2}
+        { label:"Abonnés", data: history.map(e => e.c[channel.id]?.subs ?? 0), tension:0.2 },
+        { label:"Vues", data: history.map(e => e.c[channel.id]?.views ?? 0), tension:0.2 },
+        { label:"Vidéos", data: history.map(e => e.c[channel.id]?.videos ?? 0), tension:0.2 }
       ]
     }
   });
 }
 
-// ===== MODE ANALYSE =====
-function renderAnalysis(channels){
-  const div = document.getElementById("analysis");
-  div.innerHTML = "";
+// --------- Analyse & Radar ---------
+function renderAnalysis(){
+  const channels = JSON.parse(localStorage.getItem("ytCache"))?.data || [];
+  const history = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")) || []);
+  const area = document.getElementById("analysisArea");
+  area.innerHTML = "";
 
-  channels.forEach(c=>{
-    const e = engagementScore(c);
-    const g = growthScore(c.id, +c.statistics.subscriberCount);
-    const glob = globalScore(c);
+  if(channels.length === 0) return;
 
-    const card = document.createElement("div");
-    card.className="card";
-    card.innerHTML = `
-      <h3>${c.snippet.title}</h3>
-      <div class="stat">Score global <span>${glob}</span></div>
-      <div class="stat">Engagement <span>${e}</span></div>
-      <div class="stat">Croissance <span>${g}</span></div>
-      <div class="stat">Abonnés <span>${(+c.statistics.subscriberCount).toLocaleString()}</span></div>
-      <div class="stat">Vues <span>${(+c.statistics.viewCount).toLocaleString()}</span></div>
+  const last = history[history.length-1];
+
+  const html = channels.map(c => {
+    const h = last?.c?.[c.id];
+    return `
+      <div class="card">
+        <h3>${c.snippet.title}</h3>
+        <div class="stat">Dernière capture <span>${h ? h.subs.toLocaleString() : "N/A"} subs</span></div>
+        <div class="stat">Croissance <span>${growthScore(c)}%</span></div>
+        <div class="stat">Engagement <span>${engagementScore(c)}</span></div>
+        <div class="stat">Score global <span>${globalScore(c)}</span></div>
+      </div>
     `;
-    div.appendChild(card);
+  }).join("");
+
+  area.innerHTML = `<div class="grid">${html}</div>`;
+}
+
+function renderRadar(){
+  const channels = JSON.parse(localStorage.getItem("ytCache"))?.data || [];
+  const area = document.getElementById("analysisArea");
+  area.innerHTML = `
+    <div class="card">
+      <h3>Radar de performance</h3>
+      <canvas id="radarChart" height="200"></canvas>
+    </div>
+  `;
+
+  const labels = ["Global", "Croissance", "Engagement", "Subs", "Vues"];
+  const datasets = channels.map((c, idx) => ({
+    label: c.snippet.title,
+    data: [
+      globalScore(c),
+      growthScore(c),
+      engagementScore(c),
+      Math.log10(+c.statistics.subscriberCount + 1) * 20,
+      Math.log10(+c.statistics.viewCount + 1) * 20
+    ],
+    fill:true,
+    tension:0.2
+  }));
+
+  if(radarChart) radarChart.destroy();
+
+  radarChart = new Chart(document.getElementById("radarChart"), {
+    type:"radar",
+    data:{ labels, datasets }
   });
 }
 
-// ===== EXPORT CSV =====
+// --------- CSV Export ---------
 function exportCSV(){
   const r = JSON.parse(localStorage.getItem("ytRanking"))||[];
-  let csv="Date,Rank,Chaîne,Score global,Pro,Engagement,Croissance\n";
-  const latest = r.slice(-1)[0];
-  if(!latest) return;
-
-  latest.ranking.forEach((e,i)=>{
-    csv += `${latest.time},${i+1},${e.title},${e.score},${e.pro},${e.eng},${e.growth}\n`;
+  let csv="Date,1er,Score,2e,Score\n";
+  r.forEach(e=>{
+    csv+=`${e.time},${e.first},${e.firstScore},${e.second},${e.secondScore}\n`;
   });
-
   const a=document.createElement("a");
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
-  a.download="youtube_global_ranking.csv";
+  a.download="youtube_ranking.csv";
   a.click();
 }
 
-function forceApi(){
+// --------- Init ---------
+function computeWinner(channels){
+  const sorted = channels.slice().sort((a,b)=>globalScore(b)-globalScore(a));
+  const top = sorted[0];
+  document.getElementById("winner").textContent =
+    `🏆 ${top.snippet.title} domine actuellement (score global: ${globalScore(top)})`;
+}
+
+function renderAll(channels){
+  renderTabs(channels);
+  renderChannelDashboard(channels[0]);
+  updateMainChart();
+  renderGlobalRanking();
+  updateRankingTable();
+  computeWinner(channels);
+}
+
+async function forceApi(){
   localStorage.removeItem("ytCache");
-  init();
+  const channels = await getData();
+  renderAll(channels);
 }
 
 async function init(){
-  try {
-    const channels = await getData();
-    console.log("getData() returned:", channels);
-
-    if (!Array.isArray(channels)) {
-      throw new Error("channels n'est pas un tableau");
-    }
-
-    displayChannels(channels);
-    updateChart();
-    updateRankingTable();
-    computeWinner(channels);
-    buildDashboard(channels);
-    renderAnalysis(channels);
-  } catch (e) {
-    console.error(e);
-  }
+  const channels = await getData();
+  renderAll(channels);
 }
 
-
-setInterval(init, UI_REFRESH_MIN*60000);
+setInterval(init, UI_REFRESH_MIN * 60000);
 init();
+
 </script>
 </body>
 </html>

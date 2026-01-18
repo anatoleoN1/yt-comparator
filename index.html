@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>YouTube Compare</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root {
+  --bg:#0f0f0f;
+  --card:#1f1f1f;
+  --text:white;
+  --accent:red;
+}
+.light {
+  --bg:#f2f2f2;
+  --card:white;
+  --text:black;
+}
+body {
+  margin:0;
+  font-family:Arial, sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  text-align:center;
+}
+.container {
+  max-width:1200px;
+  margin:auto;
+  padding:20px;
+}
+button, select {
+  padding:8px 14px;
+  margin:5px;
+  border:none;
+  border-radius:5px;
+}
+button {
+  background:var(--accent);
+  color:white;
+  cursor:pointer;
+}
+.cards {
+  display:flex;
+  justify-content:space-around;
+  margin-top:20px;
+}
+.card {
+  width:45%;
+  background:var(--card);
+  padding:20px;
+  border-radius:10px;
+}
+.stat { margin:6px 0; }
+#winner {
+  font-size:20px;
+  font-weight:bold;
+  margin:15px;
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<h1>📊 Comparateur de chaînes YouTube</h1>
+
+<button onclick="toggleTheme()">🌙 / ☀️</button>
+<button onclick="forceApiUpdate()">🔄 Forcer MAJ API</button>
+<button onclick="exportCSV()">📥 Export CSV</button>
+<button onclick="resetAll()">🗑️ Reset</button>
+
+<br><br>
+Graphique :
+<select id="metric" onchange="updateChart()">
+  <option value="subs">Abonnés</option>
+  <option value="views">Vues</option>
+  <option value="videos">Vidéos</option>
+</select>
+
+<div id="winner"></div>
+
+<div class="cards">
+  <div class="card" id="c1"></div>
+  <div class="card" id="c2"></div>
+</div>
+
+<canvas id="chart" height="100"></canvas>
+
+</div>
+
+<script>
+// ================= CONFIG =================
+const API_KEY = "TA_CLE_API_YOUTUBE";
+
+// IDs DES CHAÎNES
+const CHANNEL_1 = "UC_x5XG1OV2P6uZZ5FSM9Ttw";
+const CHANNEL_2 = "UC295-Dw_tDNtZXFeAPAW6Aw";
+
+// ⏱️ API appelée au MAX toutes les X heures
+const API_CACHE_HOURS = 1;
+
+// 🔁 rafraîchissement UI (sans appel API)
+const UI_REFRESH_MINUTES = 2;
+
+// Classement pondéré FIXE
+const SUB_WEIGHT = 0.6;
+const VIEW_WEIGHT = 0.4;
+// =========================================
+
+let chart;
+
+// Mode clair / sombre
+function toggleTheme() {
+  document.body.classList.toggle("light");
+}
+
+// Appel API
+async function fetchChannel(id) {
+  const url =
+    `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${id}&key=${API_KEY}`;
+  const r = await fetch(url);
+  const d = await r.json();
+  return d.items[0];
+}
+
+// Cache anti-quota
+async function getData() {
+  const cache = JSON.parse(localStorage.getItem("ytCache"));
+  const now = Date.now();
+
+  if (cache && now - cache.time < API_CACHE_HOURS * 3600000) {
+    return cache.data;
+  }
+
+  const c1 = await fetchChannel(CHANNEL_1);
+  const c2 = await fetchChannel(CHANNEL_2);
+
+  const data = { c1, c2 };
+  localStorage.setItem("ytCache", JSON.stringify({ time: now, data }));
+  saveHistory(c1, c2);
+  return data;
+}
+
+// Affichage cartes
+function display(c, el) {
+  document.getElementById(el).innerHTML = `
+    <h2>${c.snippet.title}</h2>
+    <img src="${c.snippet.thumbnails.medium.url}" width="120"><br>
+    <div class="stat">👥 ${(+c.statistics.subscriberCount).toLocaleString()}</div>
+    <div class="stat">👁️ ${(+c.statistics.viewCount).toLocaleString()}</div>
+    <div class="stat">🎥 ${(+c.statistics.videoCount).toLocaleString()}</div>
+  `;
+}
+
+// Historique
+function saveHistory(c1, c2) {
+  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
+  h.push({
+    time: new Date().toLocaleString(),
+    c1: {
+      subs:+c1.statistics.subscriberCount,
+      views:+c1.statistics.viewCount,
+      videos:+c1.statistics.videoCount
+    },
+    c2: {
+      subs:+c2.statistics.subscriberCount,
+      views:+c2.statistics.viewCount,
+      videos:+c2.statistics.videoCount
+    }
+  });
+  localStorage.setItem("ytHistory", JSON.stringify(h));
+}
+
+// Graphique
+function updateChart() {
+  const metric = document.getElementById("metric").value;
+  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById("chart"), {
+    type:"line",
+    data:{
+      labels:h.map(e=>e.time),
+      datasets:[
+        { label:"Chaîne 1", data:h.map(e=>e.c1[metric]), borderColor:"red", tension:0.2 },
+        { label:"Chaîne 2", data:h.map(e=>e.c2[metric]), borderColor:"blue", tension:0.2 }
+      ]
+    }
+  });
+}
+
+// Gagnant automatique (pondéré)
+function computeWinner(c1, c2) {
+  const score1 =
+    c1.statistics.subscriberCount * SUB_WEIGHT +
+    c1.statistics.viewCount * VIEW_WEIGHT;
+
+  const score2 =
+    c2.statistics.subscriberCount * SUB_WEIGHT +
+    c2.statistics.viewCount * VIEW_WEIGHT;
+
+  document.getElementById("winner").textContent =
+    score1 > score2 ? `🏆 ${c1.snippet.title} gagne` :
+    score2 > score1 ? `🏆 ${c2.snippet.title} gagne` :
+    "🤝 Égalité parfaite";
+}
+
+// Export CSV
+function exportCSV() {
+  const h = JSON.parse(localStorage.getItem("ytHistory")) || [];
+  let csv = "Date,C1 Subs,C1 Views,C1 Videos,C2 Subs,C2 Views,C2 Videos\n";
+  h.forEach(e=>{
+    csv += `${e.time},${e.c1.subs},${e.c1.views},${e.c1.videos},${e.c2.subs},${e.c2.views},${e.c2.videos}\n`;
+  });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download = "youtube_history.csv";
+  a.click();
+}
+
+// Reset
+function resetAll() {
+  localStorage.clear();
+  if (chart) chart.destroy();
+}
+
+// Forcer appel API
+function forceApiUpdate() {
+  localStorage.removeItem("ytCache");
+  init();
+}
+
+// Initialisation
+async function init() {
+  const { c1, c2 } = await getData();
+  display(c1,"c1");
+  display(c2,"c2");
+  updateChart();
+  computeWinner(c1,c2);
+}
+
+// Rafraîchissement fréquent SANS quota
+setInterval(init, UI_REFRESH_MINUTES * 60000);
+init();
+</script>
+</body>
+</html>

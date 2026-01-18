@@ -124,7 +124,8 @@ th{
   color:var(--muted);
 }
 .hr{height:1px;background:var(--border);margin:14px 0;}
-canvas{width:100% !important; max-width:100%;}
+/* FIX: contraindre la hauteur des canvas pour éviter l'étirement infini */
+canvas{width:100% !important; max-width:100%; height:220px !important; display:block;}
 .analysis-container{margin-top:8px;}
 </style>
 </head>
@@ -157,7 +158,7 @@ canvas{width:100% !important; max-width:100%;}
 <div class="grid">
   <div class="card">
     <h2>📈 Timeline multi-chaînes</h2>
-    <canvas id="mainChart" height="120"></canvas>
+    <canvas id="mainChart" height="220"></canvas>
   </div>
   <div class="card">
     <h2>🏆 Classement global multi-chaînes</h2>
@@ -202,10 +203,8 @@ canvas{width:100% !important; max-width:100%;}
     <button onclick="renderRadar()">🕸️ Radar</button>
   </div>
 
-  <!-- Séparateur visuel -->
   <div class="hr"></div>
 
-  <!-- Conteneur d'analyse (ne doit PAS avoir la classe hr) -->
   <div id="analysisArea" class="analysis-container"></div>
 </div>
 
@@ -264,6 +263,13 @@ function resetLocal(){
   localStorage.removeItem("ytRanking");
   alert("Cache supprimé !");
   init();
+}
+
+// --------- Helpers ---------
+function getColor(i, alpha = 1){
+  // simple HSL palette
+  const hue = (i * 47) % 360;
+  return `hsla(${hue}, 85%, 55%, ${alpha})`;
 }
 
 // --------- Fetch API ---------
@@ -419,7 +425,6 @@ function updateMainChart(){
   const cachedChannels = JSON.parse(localStorage.getItem("ytCache"))?.data || [];
 
   if(!cachedChannels || cachedChannels.length === 0){
-    // Pas de données -> afficher message simple
     const ctxEl = document.getElementById("mainChart");
     const ctx = ctxEl.getContext ? ctxEl.getContext("2d") : null;
     if(ctx){
@@ -429,6 +434,7 @@ function updateMainChart(){
         options: {
           plugins: { legend: { display: false } },
           scales: { x: { display: false }, y: { display: false } },
+          maintainAspectRatio: true
         }
       });
     }
@@ -440,7 +446,10 @@ function updateMainChart(){
     label: c.snippet?.title || `Chaîne ${idx+1}`,
     data: h.map(e => e.c?.[c.id]?.[metric] ?? 0),
     tension:0.2,
-    borderColor: undefined
+    borderColor: getColor(idx),
+    backgroundColor: getColor(idx, 0.12),
+    pointRadius: 2,
+    fill: false
   }));
 
   const ctx = document.getElementById("mainChart").getContext("2d");
@@ -452,7 +461,7 @@ function updateMainChart(){
     },
     options:{
       responsive:true,
-      maintainAspectRatio:false
+      maintainAspectRatio:true
     }
   });
 }
@@ -513,27 +522,28 @@ function renderTabs(channels){
 function renderChannelDashboard(channel){
   const dash = document.getElementById("channelDash");
   dash.innerHTML = `
-    <h3>${channel.snippet.title}</h3>
+    <h3>${channel.snippet?.title || ''}</h3>
     <div class="grid">
       <div class="card">
         <h2>📌 Stats</h2>
-        <div class="stat">Score global <span>${globalScore(channel)} / 100</span></div>
-        <div class="stat">Croissance <span>${growthScore(channel)}%</span></div>
-        <div class="stat">Engagement <span>${engagementScore(channel)}</span></div>
-        <div class="stat">Abonnés <span>${(+channel.statistics.subscriberCount).toLocaleString()}</span></div>
-        <div class="stat">Vues <span>${(+channel.statistics.viewCount).toLocaleString()}</span></div>
-        <div class="stat">Vidéos <span>${(+channel.statistics.videoCount).toLocaleString()}</span></div>
+        <div class="stat">Score global <span>${channel && channel.statistics ? globalScore(channel) : 0} / 100</span></div>
+        <div class="stat">Croissance <span>${channel && channel.statistics ? growthScore(channel) : 0}%</span></div>
+        <div class="stat">Engagement <span>${channel && channel.statistics ? engagementScore(channel) : 0}</span></div>
+        <div class="stat">Abonnés <span>${channel && channel.statistics ? (+channel.statistics.subscriberCount).toLocaleString() : "N/A"}</span></div>
+        <div class="stat">Vues <span>${channel && channel.statistics ? (+channel.statistics.viewCount).toLocaleString() : "N/A"}</span></div>
+        <div class="stat">Vidéos <span>${channel && channel.statistics ? (+channel.statistics.videoCount).toLocaleString() : "N/A"}</span></div>
       </div>
 
       <div class="card">
         <h2>📈 Graphiques</h2>
-        <canvas id="chart_${channel.id}" height="120"></canvas>
+        <canvas id="chart_${channel.id || 'empty'}" height="220"></canvas>
       </div>
     </div>
   `;
 
-  // Small timeout to ensure canvas is in DOM/layout (robustness)
-  setTimeout(() => renderChannelChart(channel), 50);
+  setTimeout(() => {
+    if(channel && channel.id) renderChannelChart(channel);
+  }, 50);
 }
 
 function renderChannelChart(channel){
@@ -544,19 +554,20 @@ function renderChannelChart(channel){
   if(channelCharts[channel.id]) channelCharts[channel.id].destroy();
 
   const ctx = canvasEl.getContext('2d');
+  const baseIdx = CHANNELS.indexOf(channel.id);
   channelCharts[channel.id] = new Chart(ctx, {
     type:"line",
     data:{
       labels: history.map(e => e.time),
       datasets:[
-        { label:"Abonnés", data: history.map(e => e.c[channel.id]?.subs ?? 0), tension:0.2 },
-        { label:"Vues", data: history.map(e => e.c[channel.id]?.views ?? 0), tension:0.2 },
-        { label:"Vidéos", data: history.map(e => e.c[channel.id]?.videos ?? 0), tension:0.2 }
+        { label:"Abonnés", data: history.map(e => e.c[channel.id]?.subs ?? 0), tension:0.2, borderColor: getColor(baseIdx*3+0), backgroundColor: getColor(baseIdx*3+0,0.12), pointRadius:1 },
+        { label:"Vues",    data: history.map(e => e.c[channel.id]?.views ?? 0), tension:0.2, borderColor: getColor(baseIdx*3+1), backgroundColor: getColor(baseIdx*3+1,0.12), pointRadius:1 },
+        { label:"Vidéos",  data: history.map(e => e.c[channel.id]?.videos ?? 0), tension:0.2, borderColor: getColor(baseIdx*3+2), backgroundColor: getColor(baseIdx*3+2,0.12), pointRadius:1 }
       ]
     },
     options:{
       responsive:true,
-      maintainAspectRatio:false
+      maintainAspectRatio:true
     }
   });
 }
@@ -597,7 +608,7 @@ function renderRadar(){
   area.innerHTML = `
     <div class="card">
       <h3>Radar de performance</h3>
-      <canvas id="radarChart" height="200"></canvas>
+      <canvas id="radarChart" height="220"></canvas>
     </div>
   `;
 
@@ -617,7 +628,9 @@ function renderRadar(){
       Math.log10(+c.statistics.viewCount + 1) * 20
     ],
     fill:true,
-    tension:0.2
+    backgroundColor: getColor(idx, 0.18),
+    borderColor: getColor(idx),
+    pointBackgroundColor: getColor(idx)
   }));
 
   if(radarChart) radarChart.destroy();
@@ -626,7 +639,7 @@ function renderRadar(){
   radarChart = new Chart(ctx, {
     type:"radar",
     data:{ labels, datasets },
-    options:{ responsive:true, maintainAspectRatio:false }
+    options:{ responsive:true, maintainAspectRatio:true }
   });
 }
 

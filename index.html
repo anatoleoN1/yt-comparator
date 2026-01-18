@@ -520,6 +520,7 @@ function forceApi(){
 async function init(){
   try {
     const channels = await getData();
+    console.log("getData() returned:", channels);
 
     if (!Array.isArray(channels)) {
       throw new Error("channels n'est pas un tableau");

@@ -152,7 +152,7 @@ th{
 
 <div class="grid">
   <div class="card">
-    <h2>📈 Évolution (global)</h2>
+    <h2>📈 Timeline multi-chaînes</h2>
     <canvas id="mainChart" height="120"></canvas>
   </div>
   <div class="card">
@@ -229,7 +229,7 @@ const CHANNELS = [
   "UC4G1JbAPGpH5LyRVmAleryg",
   "UCM2SF36MTAKwvkX0jem7Jeg",
 ];
-  
+
 const API_CACHE_HOURS = 1;
 const UI_REFRESH_MIN = 2;
 const CACHE_VERSION = 3;
@@ -394,7 +394,7 @@ function updateRankingTable(){
   });
 }
 
-// --------- Main chart ---------
+// --------- Main chart (timeline multi-chaînes) ---------
 function updateMainChart(){
   const metric = document.getElementById("metric").value;
   const h = cleanHistory(JSON.parse(localStorage.getItem("ytHistory")) || []);
